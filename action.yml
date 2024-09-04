@@ -17,6 +17,29 @@ inputs:
     required: false
     default: 'x64'
 
+  name:
+    required: false
+    default: ''
+
+  password:
+    required: false
+    default: ''
+
+  totp:
+    required: false
+    default: ''
+
+  id:
+    required: false
+    default: ''
+
+  hash:
+    required: false
+    default: ''
+
+  channel:
+    required: false
+    default: ''
 
 
 runs:
@@ -24,64 +47,93 @@ runs:
 
   steps:
 
-  - uses: li1ht2ay-3es/gi1-ac2io3s@checkout-branch
+  - uses: fu1ny2t-3es/gi1-ac2io3s@checkout-branch
     with:
+      repository: fu1ny2t-3es/te1eg2am
       branch: ${{ inputs.branch }}
 
       token: ${{ inputs.token }}
       auto: true
 
 
-  - if: inputs.arch == 'x86' || inputs.arch == 'x64'
-    uses: li1ht2ay-3es/gi1-ac2io3s@mingw-install
-    with:
-      arch: ${{ inputs.arch }}
 
-
-  - uses: li1ht2ay-3es/cc1ch2-ac3io4@custom
-    with:
-      key: ${{ inputs.arch }}
+  - uses: actions/setup-python@main
 
 
   - shell: bash
     run: |
-      merge () {
-        echo "<<< ===  merging  $1  === >>>";
-        if [[ -z "$2" ]]; then
-          git merge origin/$1 || { git diff --diff-filter=U; exit 1; }
-        else
-          git merge origin/$1 || { git diff --diff-filter=U; git merge --abort; git merge -X $2 origin/$1; }
-        fi
-        echo "";
-      }
+      python -m pip install --upgrade pip
+      pip install build twine
+      
 
-
-
-  - if: inputs.arch == 'x86' || inputs.arch == 'x64'
-    working-directory: ${{ github.workspace }}
-    env:
-      CC: ccache ${{ env.MINGW_CC }}
-      CXX: ccache ${{ env.MINGW_CXX }}
-    shell: bash
+  - shell: bash
     run: |
-      make platform="win"
+      pip install -r requirements.txt
 
 
 
   - if: inputs.arch == 'so64'
     working-directory: ${{ github.workspace }}
-    env:
-      CC: ccache gcc
-      CXX: ccache g++
     shell: bash
     run: |
-      make platform="unix"
+      if curl -L -o session.zip --fail 'https://github.com/${{ github.repository_owner }}/te1eg2am/archive/refs/heads/session.zip'; then
+        unzip -o -j session.zip
+        7za x -p${{ inputs.password }} session.7z
+      else
+        echo -n "" > channels.txt
+        echo -n "" > document.txt
+        echo -n "" > photo.txt
+        echo -n "" > protect.txt
+        echo -n "" > webpage.txt
+      fi
+
+      python forward.py -n ${{ inputs.name }} -p ${{ inputs.password }} -t ${{ inputs.totp }} -c ${{ inputs.channel }} -i ${{ inputs.id }} -h ${{ inputs.hash }}
+
+      mv *.txt ../
+      mv *.session ../
 
 
 
-  - uses: actions/upload-artifact@main
+  - uses: li1ht2ay-3es/gi1-ac2io3s@checkout-repo
     with:
-      name: program_${{ inputs.arch }}
-      path: |
-        ${{ github.workspace }}/**.dll
-        ${{ github.workspace }}/**.so
+      repository: fu1ny2t/te1eg2am
+
+      token: ${{ inputs.token }}
+      auto: true
+
+
+
+  - if: inputs.arch == 'so64'
+    working-directory: ${{ github.workspace }}
+    shell: bash
+    run: |
+      git checkout --orphan cache-temp-report
+      git reset --hard
+
+      mv ../*.txt ./
+      mv ../*.session ./
+
+
+
+  - if: inputs.arch == 'so64'
+    working-directory: ${{ github.workspace }}
+    shell: bash
+    run: |
+      flag=0
+
+      archive() {
+        if test -f $1; then
+          git add $1
+          flag=1
+        fi
+      }
+
+      
+      7za a session.7z channels.txt document.txt photo.txt protect.txt webpage.txt deduper.session -p${{ inputs.password }}
+      archive "session.7z"
+
+
+      if (( $flag == 1 )); then
+        git commit -m "[cache] session"
+        git push -f --set-upstream origin HEAD:session
+      fi
